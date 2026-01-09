@@ -1,90 +1,106 @@
-import { api, API_BASE_URL } from '@/constants/api';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-export default function App() {
-  const [empleados, setEmpleados] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+export default function LoginScreen() {
+  const router = useRouter();
+  const [email, setEmail] = useState('admin@kin.com'); // Pre-llenado para probar rápido
+  const [password, setPassword] = useState('admin123');
+  const [loading, setLoading] = useState(false);
 
-  // base URL moved to constants/api.ts
-
-  // --- FUNCIÓN PARA PEDIR DATOS A PYTHON ---
-  const fetchEmpleados = async () => {
+  // --- LÓGICA DE CONEXIÓN ---
+  const handleLogin = async () => {
     setLoading(true);
     try {
-      console.log('Conectando a:', API_BASE_URL);
-      const response = await api.get('/empleados/');
-      setEmpleados(response.data);
-    } catch (error) {
-      console.error("Error:", error);
-      const message = error instanceof Error ? error.message : String(error);
-      alert("Error: " + message);
+      // 1. URL (Localhost funciona porque estás en Web)
+      const apiUrl = 'http://localhost:8000/auth/token';
+
+      // 2. Preparar los datos (Formato UrlEncoded manual para evitar problemas)
+      const formBody = new URLSearchParams();
+      formBody.append('username', email);
+      formBody.append('password', password);
+
+      // 3. ¡Disparar con FETCH! 🔫
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: formBody.toString(), // Convertimos los datos a texto
+      });
+
+      // 4. Verificar si funcionó
+      if (!response.ok) {
+        // Si el servidor responde 400, 401 o 500, lanzamos error manual
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Error en el servidor');
+      }
+
+      // 5. ¡Éxito!
+      const data = await response.json();
+      console.log("Token recibido:", data.access_token);
+
+      await AsyncStorage.setItem('userToken', data.access_token); // Guardamos el token
+      router.replace('/(tabs)/dashboard');
+
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert("Error", error.message || "No se pudo conectar 🔴");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchEmpleados();
-  }, []);
+  return (
+    <View className="flex-1 justify-center items-center bg-background px-6">
+      <View className="w-full max-w-sm bg-surface p-8 rounded-2xl shadow-lg border border-gray-100">
 
-  // --- DISEÑO DE LA TARJETA (CARTA) ---
-  const renderItem = ({ item }: { item: any }) => (
-    <View className="bg-white rounded-xl p-4 mb-3 flex-row items-center shadow" style={styles.card}>
-      <View className="w-11 h-11 rounded-full bg-indigo-600 justify-center items-center mr-4" style={styles.avatar}>
-        <Text className="text-white font-bold" style={styles.avatarText}>
-          {(item?.nombre?.charAt(0) ?? '') + (item?.apellido_paterno?.charAt(0) ?? '')}
-        </Text>
-      </View>
-      <View className="flex-1" style={styles.info}>
-        <Text className="font-semibold text-base text-gray-700" style={styles.nombre}>{(item?.nombre ?? '') + ' ' + (item?.apellido_paterno ?? '')}</Text>
-        <Text className="text-sm text-gray-500" style={styles.puesto}>{item?.puesto ?? ''}</Text>
-        <Text className="text-xs text-gray-400" style={styles.email}>{item?.email ?? ''}</Text>
+        {/* LOGO / TÍTULO */}
+        <Text className="text-3xl font-bold text-kin-dark text-center mb-2">Kin ERP</Text>
+        <Text className="text-text-secondary text-center mb-8">Inicia sesión para continuar</Text>
+
+        {/* INPUT EMAIL */}
+        <View className="mb-4">
+          <Text className="text-text-main font-medium mb-1 ml-1">Correo Electrónico</Text>
+          <TextInput
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-text-main focus:border-primary focus:border-2"
+            placeholder="ejemplo@kin.com"
+            placeholderTextColor="#9CA3AF"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+          />
+        </View>
+
+        {/* INPUT PASSWORD */}
+        <View className="mb-8">
+          <Text className="text-text-main font-medium mb-1 ml-1">Contraseña</Text>
+          <TextInput
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-text-main focus:border-primary focus:border-2"
+            placeholder="••••••••"
+            placeholderTextColor="#9CA3AF"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+        </View>
+
+        {/* BOTÓN LOGIN */}
+        <TouchableOpacity
+          className={`w-full py-4 rounded-xl flex-row justify-center items-center ${loading ? 'bg-primary-light' : 'bg-primary active:bg-primary-active'}`}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#4F46E5" />
+          ) : (
+            <Text className="text-white font-bold text-lg">Ingresar</Text>
+          )}
+        </TouchableOpacity>
+
       </View>
     </View>
   );
-
-  return (
-    <SafeAreaView className="flex-1 bg-gray-100" style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <View style={styles.header} className="p-5 pt-10 bg-white border-b border-gray-200">
-        <Text style={styles.title} className="text-2xl font-bold text-gray-900">Kin ERP 🐉</Text>
-        <Text style={styles.subtitle} className="text-sm text-gray-500">Personal Activo</Text>
-      </View>
-
-      {loading ? (
-        <View className="mt-12 items-center">
-          <ActivityIndicator size="large" color="#4F46E5" />
-        </View>
-      ) : (
-        <FlatList
-          className="px-4"
-          data={empleados}
-          keyExtractor={(item, i) => (item?.id ? String(item.id) : String(i))}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
-          onRefresh={fetchEmpleados}
-          refreshing={loading}
-          ListEmptyComponent={<Text className="text-center mt-5 text-gray-500">No hay empleados registrados.</Text>}
-        />
-      )}
-    </SafeAreaView>
-  );
 }
-
-// --- ESTILOS VISUALES ---
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
-  header: { padding: 20, paddingTop: 40, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#E5E7EB' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
-  subtitle: { fontSize: 14, color: '#6B7280' },
-  list: { padding: 16 },
-  empty: { textAlign: 'center', marginTop: 20, color: '#999' },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  avatar: { width: 45, height: 45, borderRadius: 25, backgroundColor: '#4F46E5', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  avatarText: { color: '#fff', fontWeight: 'bold' },
-  info: { flex: 1 },
-  nombre: { fontWeight: '700', fontSize: 16, color: '#374151' },
-  puesto: { fontSize: 14, color: '#6B7280' },
-  email: { fontSize: 12, color: '#9CA3AF' }
-});
